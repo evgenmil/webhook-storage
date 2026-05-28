@@ -8,7 +8,7 @@ Framework-agnostic слой хранения вебхуков для PHP.
 - Идемпотентность по `external_event_id`.
 - Подключается в любой фреймворк через DI. Никаких зависимостей от Yii/Laravel/Symfony.
 
-Что модуль **делает**: сохраняет вебхук и обновляет его статус.
+Что модуль **делает**: сохраняет вебхук, читает запись по id, обновляет её статус.
 Что модуль **не делает**: парсинг payload, проверка подписи, очереди, бизнес-логика, HTTP-роутинг.
 
 ## Установка
@@ -99,10 +99,16 @@ $result = $store->save(
 // 2. Отдаёте $result->id в очередь / воркер.
 
 // 3. В воркере:
+$webhook = $store->get('amocrm', $id);
+if ($webhook === null) {
+    // запись удалена или неверный id — решение за приложением
+    return;
+}
+
 $store->markProcessing('amocrm', $id);
 
 try {
-    // ... ваша бизнес-логика ...
+    // ... ваша бизнес-логика на $webhook->payload ...
     $store->markDone('amocrm', $id);
 } catch (\Throwable $e) {
     $store->markFailed('amocrm', $id, $e->getMessage());
@@ -113,11 +119,23 @@ try {
 
 ```php
 WebhookStore::save(string $source, string $externalEventId, array $payload): SaveResult
+WebhookStore::get(string $source, int $id): ?WebhookRecord
 WebhookStore::markProcessing(string $source, int $id): void   // attempts++
 WebhookStore::markDone(string $source, int $id): void          // last_error = NULL
 WebhookStore::markFailed(string $source, int $id, string $error): void
 
 SaveResult { public int $id; public bool $isDuplicate; }
+
+WebhookRecord {
+    public int $id;
+    public string $externalEventId;
+    public array $payload;              // уже декодирован из JSON
+    public Status $status;
+    public int $attempts;
+    public ?string $lastError;
+    public \DateTimeImmutable $receivedAt;
+    public \DateTimeImmutable $updatedAt;
+}
 
 enum Status: string { Pending, Processing, Done, Failed }
 ```
@@ -214,7 +232,8 @@ composer db:test:drop
 ```
 src/
   WebhookStore.php                   фасад (публичный API)
-  SaveResult.php                     DTO
+  SaveResult.php                     DTO результата save
+  WebhookRecord.php                  DTO записи из БД
   Status.php                         enum статусов
   SourceTableMap.php                 source -> table
   WebhookRepositoryInterface.php     контракт хранилища

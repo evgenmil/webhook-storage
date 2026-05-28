@@ -7,6 +7,7 @@ namespace evgenmil\WebhookStorage\Repository;
 use evgenmil\WebhookStorage\Internal\TableNameGuard;
 use evgenmil\WebhookStorage\SaveResult;
 use evgenmil\WebhookStorage\Status;
+use evgenmil\WebhookStorage\WebhookRecord;
 use evgenmil\WebhookStorage\WebhookRepositoryInterface;
 
 final class PdoMysqlWebhookRepository implements WebhookRepositoryInterface
@@ -82,5 +83,40 @@ final class PdoMysqlWebhookRepository implements WebhookRepositoryInterface
             ':err'    => $error,
             ':id'     => $id,
         ]);
+    }
+
+    public function findById(string $table, int $id): ?WebhookRecord
+    {
+        TableNameGuard::assertValid($table);
+
+        $stmt = $this->pdo->prepare(
+            "SELECT id, external_event_id, payload, status, attempts, last_error, received_at, updated_at
+             FROM `{$table}` WHERE id = :id"
+        );
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+
+        if (!is_array($row)) {
+            return null;
+        }
+
+        return $this->hydrate($row);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function hydrate(array $row): WebhookRecord
+    {
+        return new WebhookRecord(
+            id:                (int) $row['id'],
+            externalEventId:   (string) $row['external_event_id'],
+            payload:           json_decode((string) $row['payload'], true, 512, JSON_THROW_ON_ERROR),
+            status:            Status::from((string) $row['status']),
+            attempts:          (int) $row['attempts'],
+            lastError:         $row['last_error'] !== null ? (string) $row['last_error'] : null,
+            receivedAt:        new \DateTimeImmutable((string) $row['received_at']),
+            updatedAt:         new \DateTimeImmutable((string) $row['updated_at']),
+        );
     }
 }

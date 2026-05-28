@@ -7,6 +7,7 @@ namespace evgenmil\WebhookStorage\Tests\Integration\Repository;
 use evgenmil\WebhookStorage\Repository\PdoMysqlWebhookRepository;
 use evgenmil\WebhookStorage\SaveResult;
 use evgenmil\WebhookStorage\Status;
+use evgenmil\WebhookStorage\WebhookRecord;
 use evgenmil\WebhookStorage\Tests\Integration\IntegrationTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -49,7 +50,7 @@ final class PdoMysqlWebhookRepositoryTest extends IntegrationTestCase
 
         $row = $this->fetchRow($result->id);
         self::assertNotNull($row);
-        self::assertSame($payload, json_decode($row['payload'], true));
+        self::assertEquals($payload, json_decode($row['payload'], true));
         self::assertStringContainsString('Привет', $row['payload']);
     }
 
@@ -188,5 +189,53 @@ final class PdoMysqlWebhookRepositoryTest extends IntegrationTestCase
         $this->repo->markFailed($this->table, 999_999, 'x');
 
         self::assertSame(0, $this->countRows());
+    }
+
+    #[Test]
+    public function find_by_id_returns_null_for_missing_row(): void
+    {
+        self::assertNull($this->repo->findById($this->table, 999_999));
+    }
+
+    #[Test]
+    public function find_by_id_returns_record_with_decoded_payload(): void
+    {
+        $payload = ['event' => 'lead.created', 'n' => 42];
+        $id      = $this->repo->save($this->table, 'evt-read', $payload)->id;
+
+        $record = $this->repo->findById($this->table, $id);
+
+        self::assertInstanceOf(WebhookRecord::class, $record);
+        self::assertSame($id, $record->id);
+        self::assertSame('evt-read', $record->externalEventId);
+        self::assertEquals($payload, $record->payload);
+        self::assertSame(Status::Pending, $record->status);
+        self::assertSame(0, $record->attempts);
+        self::assertNull($record->lastError);
+        self::assertInstanceOf(\DateTimeImmutable::class, $record->receivedAt);
+        self::assertInstanceOf(\DateTimeImmutable::class, $record->updatedAt);
+    }
+
+    #[Test]
+    public function find_by_id_reflects_status_updates(): void
+    {
+        $id = $this->repo->save($this->table, 'evt-upd', ['k' => 1])->id;
+
+        $this->repo->markProcessing($this->table, $id);
+        $this->repo->markFailed($this->table, $id, 'oops');
+
+        $record = $this->repo->findById($this->table, $id);
+
+        self::assertNotNull($record);
+        self::assertSame(Status::Failed, $record->status);
+        self::assertSame(1, $record->attempts);
+        self::assertSame('oops', $record->lastError);
+    }
+
+    #[Test]
+    public function find_by_id_rejects_invalid_table_name(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->repo->findById('1bad', 1);
     }
 }

@@ -32,4 +32,9 @@ interface WebhookRepositoryInterface
      * Переводит запись в 'failed', пишет last_error.
      */
     public function markFailed(string $table, int $id, string $error): void;
+
+    /**
+     * Возвращает запись по id или null, если строки нет.
+     */
+    public function findById(string $table, int $id): ?WebhookRecord;
 }

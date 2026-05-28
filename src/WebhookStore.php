@@ -41,4 +41,9 @@ final class WebhookStore
     {
         $this->repository->markFailed($this->tables->tableFor($source), $id, $error);
     }
+
+    public function get(string $source, int $id): ?WebhookRecord
+    {
+        return $this->repository->findById($this->tables->tableFor($source), $id);
+    }
 }

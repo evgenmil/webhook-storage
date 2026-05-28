@@ -9,6 +9,8 @@ use evgenmil\WebhookStorage\Exception\WebhookStorageException;
 use evgenmil\WebhookStorage\Internal\TableNameGuard;
 use evgenmil\WebhookStorage\SaveResult;
 use evgenmil\WebhookStorage\SourceTableMap;
+use evgenmil\WebhookStorage\Status;
+use evgenmil\WebhookStorage\WebhookRecord;
 use evgenmil\WebhookStorage\WebhookRepositoryInterface;
 use evgenmil\WebhookStorage\WebhookStore;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -20,6 +22,8 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(WebhookStore::class)]
 #[UsesClass(SourceTableMap::class)]
 #[UsesClass(SaveResult::class)]
+#[UsesClass(WebhookRecord::class)]
+#[UsesClass(Status::class)]
 #[UsesClass(TableNameGuard::class)]
 #[UsesClass(UnknownSourceException::class)]
 #[UsesClass(WebhookStorageException::class)]
@@ -118,6 +122,39 @@ final class WebhookStoreTest extends TestCase
     }
 
     #[Test]
+    public function get_delegates_to_repository_with_resolved_table(): void
+    {
+        $record = new WebhookRecord(
+            id: 42,
+            externalEventId: 'evt-1',
+            payload: ['x' => 1],
+            status: Status::Pending,
+            attempts: 0,
+            lastError: null,
+            receivedAt: new \DateTimeImmutable('2026-01-01 12:00:00'),
+            updatedAt: new \DateTimeImmutable('2026-01-01 12:00:00'),
+        );
+
+        $this->repository
+            ->expects(self::once())
+            ->method('findById')
+            ->with('webhooks_amocrm', 42)
+            ->willReturn($record);
+
+        self::assertSame($record, $this->store->get('amocrm', 42));
+    }
+
+    #[Test]
+    public function get_returns_null_when_repository_finds_nothing(): void
+    {
+        $this->repository
+            ->method('findById')
+            ->willReturn(null);
+
+        self::assertNull($this->store->get('amocrm', 999));
+    }
+
+    #[Test]
     public function save_throws_unknown_source_and_does_not_touch_repository(): void
     {
         $this->repository->expects(self::never())->method(self::anything());
@@ -134,6 +171,7 @@ final class WebhookStoreTest extends TestCase
         $this->repository->expects(self::never())->method(self::anything());
 
         $cases = [
+            fn () => $this->store->get('tilda', 1),
             fn () => $this->store->markProcessing('tilda', 1),
             fn () => $this->store->markDone('tilda', 1),
             fn () => $this->store->markFailed('tilda', 1, 'x'),
