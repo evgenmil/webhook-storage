@@ -25,7 +25,18 @@
         "test": "phpunit",
         "test:unit": "phpunit --testsuite=unit",
         "test:integration": "phpunit --testsuite=integration",
-        "db:test:setup": "php scripts/setup-test-db.php"
+        "test:ci": [
+            "@db:test:setup",
+            "@test",
+            "@db:test:drop"
+        ],
+        "db:test:setup": "php scripts/setup-test-db.php",
+        "db:test:drop": "php scripts/teardown-test-db.php"
+    },
+    "scripts-descriptions": {
+        "test:ci": "Full isolated run: create test DB, run all tests, drop test DB.",
+        "db:test:setup": "Create the test database from WH_TEST_DSN (idempotent).",
+        "db:test:drop": "Drop the test database from WH_TEST_DSN (refuses non-test names)."
     },
     "minimum-stability": "stable"
 }
