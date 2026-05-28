@@ -54,6 +54,9 @@ final class TableNameGuardTest extends TestCase
         yield 'sql injection'     => ['a; DROP TABLE users; --'];
         yield 'cyrillic letters'  => ['вебхуки'];
         yield 'unicode digits'    => ["webhooks\u{0660}"];
+        yield 'trailing newline'  => ["webhooks\n"];
+        yield 'trailing CRLF'     => ["webhooks\r\n"];
+        yield 'newline in middle' => ["web\nhooks"];
     }
 
     #[Test]

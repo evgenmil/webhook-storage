@@ -12,7 +12,7 @@ final class TableNameGuard
 {
     public static function assertValid(string $name): void
     {
-        if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $name) !== 1) {
+        if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $name) !== 1) {
             throw new \InvalidArgumentException("Invalid table name: {$name}");
         }
     }
