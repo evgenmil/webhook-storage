@@ -132,14 +132,65 @@ enum Status: string { Pending, Processing, Done, Failed }
 
 ```bash
 composer install
-composer test
+composer test:unit          # юнит-тесты, без БД
+composer test:integration   # интеграционные, требуют MySQL
+composer test               # всё вместе
 ```
 
-Юнит-тесты на PHPUnit 10, покрывают весь framework-agnostic код пакета
-(`WebhookStore`, `SourceTableMap`, `WebhookSchema`, `TableNameGuard`,
-`SaveResult`, `Status`, исключения). Тесты не требуют MySQL и работают
-с моком `WebhookRepositoryInterface`. Интеграционные тесты реализации
-`PdoMysqlWebhookRepository` подключаются отдельно.
+### Юнит-тесты
+Покрывают framework-agnostic ядро: `WebhookStore`, `SourceTableMap`,
+`WebhookSchema`, `TableNameGuard`, `SaveResult`, `Status`, исключения.
+Репозиторий заменяется моком `WebhookRepositoryInterface`. БД не нужна.
+
+### Интеграционные тесты `PdoMysqlWebhookRepository`
+Поднимают реальные `CREATE TABLE` / `INSERT` / `UPDATE` на MySQL. Каждый
+тест создаёт уникальную таблицу `__wh_test_<random>` и дропает её в
+`tearDown()`. Если БД недоступна, эти тесты автоматически пропускаются —
+`composer test:unit` зелёный без MySQL.
+
+Подготовка БД (один раз):
+
+```bash
+composer db:test:setup
+```
+
+Скрипт читает `WH_TEST_DSN`, подключается к серверу без указания БД
+и делает `CREATE DATABASE IF NOT EXISTS` с `utf8mb4 / utf8mb4_unicode_ci`.
+Безопасно запускать повторно.
+
+Альтернатива — создать БД руками:
+
+```sql
+CREATE DATABASE webhook_storage_test
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_unicode_ci;
+```
+
+Параметры подключения берутся из переменных окружения. Приоритет такой:
+реальный `export` в шелле → файл `.env` в корне пакета (читает
+`tests/bootstrap.php`) → ничего.
+
+| Переменная     | Назначение                                                                  |
+|----------------|-----------------------------------------------------------------------------|
+| `WH_TEST_DSN`  | PDO DSN, например `mysql:host=127.0.0.1;port=3306;dbname=webhook_storage_test;charset=utf8mb4` |
+| `WH_TEST_USER` | пользователь MySQL                                                          |
+| `WH_TEST_PASS` | пароль                                                                      |
+
+Пример `.env` в корне пакета (файл в `.gitignore`):
+
+```env
+WH_TEST_DSN="mysql:host=127.0.0.1;port=3306;dbname=webhook_storage_test;charset=utf8mb4"
+WH_TEST_USER="root"
+WH_TEST_PASS=""
+```
+
+Полный цикл первой настройки:
+
+```bash
+composer install
+composer db:test:setup
+composer test
+```
 
 ## Структура
 
@@ -161,5 +212,6 @@ src/
     TableNameGuard.php               валидация имени таблицы
 tests/
   Unit/                              юнит-тесты (без БД)
+  Integration/                       интеграционные тесты (нужен MySQL)
 phpunit.xml.dist
 ```

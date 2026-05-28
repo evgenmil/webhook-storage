@@ -23,7 +23,9 @@
     },
     "scripts": {
         "test": "phpunit",
-        "test:unit": "phpunit --testsuite=unit"
+        "test:unit": "phpunit --testsuite=unit",
+        "test:integration": "phpunit --testsuite=integration",
+        "db:test:setup": "php scripts/setup-test-db.php"
     },
     "minimum-stability": "stable"
 }
